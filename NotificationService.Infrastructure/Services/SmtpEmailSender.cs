@@ -4,12 +4,10 @@ using Microsoft.Extensions.Options;
 using NotificationService.Application.Configurations;
 using TaskHandler.Domain.Services;
 
-namespace TaskHandler.Infrastructure.Services;
+namespace NotificationService.Infrastructure.Services;
 
 public class SmtpEmailSender : IEmailSender
 {
-    private readonly EmailSettings _emailSettings;
-    
     private readonly string? _smtpServer;
     private readonly int _smtpPort;
     private readonly string? _smtpUser;
@@ -18,35 +16,17 @@ public class SmtpEmailSender : IEmailSender
     private readonly string? _smtpFromDisplayName;
     private readonly bool _smtpEnableSsl;
     
-    public SmtpEmailSender(
-        string? smtpServer, 
-        int smtpPort, 
-        string? smtpUser, 
-        string? smtpPassword, 
-        bool smtpEnableSsl,
-        string? smtpFrom, 
-        string? smtpFromDisplayName)
-    {
-        _smtpServer = smtpServer;
-        _smtpPort = smtpPort;
-        _smtpUser = smtpUser;
-        _smtpPassword = smtpPassword;
-        _smtpFrom = smtpFrom;
-        _smtpFromDisplayName = smtpFromDisplayName;
-        _smtpEnableSsl = smtpEnableSsl;
-    }
-    
     public SmtpEmailSender(IOptions<EmailSettings> emailSettings)
     {
-        _emailSettings = emailSettings.Value;
+        var emailSettings1 = emailSettings.Value;
         
-        _smtpServer = _emailSettings.SmtpServer;;
-        _smtpPort = _emailSettings.SmtpPort;;
-        _smtpUser = _emailSettings.SmtpUsername;
-        _smtpPassword = _emailSettings.SmtpPassword;
-        _smtpFrom = _emailSettings.FromEmail;
-        _smtpFromDisplayName = _emailSettings.FromName;
-        _smtpEnableSsl = _emailSettings.EnableSsl;
+        _smtpServer = emailSettings1.SmtpServer;;
+        _smtpPort = emailSettings1.SmtpPort;;
+        _smtpUser = emailSettings1.SmtpUsername;
+        _smtpPassword = emailSettings1.SmtpPassword;
+        _smtpFrom = emailSettings1.FromEmail;
+        _smtpFromDisplayName = emailSettings1.FromName;
+        _smtpEnableSsl = emailSettings1.EnableSsl;
     }
     
     public async Task<bool> SendEmailAsync(string email, string subject, string message)

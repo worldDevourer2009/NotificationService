@@ -1,7 +1,6 @@
-using NotificationService.Application.Commands;
 using TaskHandler.Domain.Services;
 
-namespace TaskHandler.Application.Commands.Emails;
+namespace NotificationService.Application.Commands.Emails;
 
 public record SendEmailCommand(
     string? Email,
@@ -14,6 +13,8 @@ public record SendEmailCommandResponse(bool Success);
 
 public class EmailCommandHandler : ICommandHandler<SendEmailCommand, SendEmailCommandResponse>
 {
+    public record User(string Email);
+    
     private readonly IEmailSender _emailSender;
 
     public EmailCommandHandler(IEmailSender emailSender)
@@ -24,9 +25,9 @@ public class EmailCommandHandler : ICommandHandler<SendEmailCommand, SendEmailCo
     public async Task<SendEmailCommandResponse> Handle(SendEmailCommand request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.Subject) ||
-            string.IsNullOrWhiteSpace(request.Message))
+        if (string.IsNullOrWhiteSpace(request.Subject) ||
+            string.IsNullOrWhiteSpace(request.Message) ||
+            string.IsNullOrWhiteSpace(request.Email))
         {
             return new SendEmailCommandResponse(false);
         }

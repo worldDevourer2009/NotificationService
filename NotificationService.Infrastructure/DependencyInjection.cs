@@ -5,6 +5,7 @@ using NotificationService.Application.Configurations;
 using NotificationService.Domain.Services;
 using NotificationService.Infrastructure.Services;
 using StackExchange.Redis;
+using TaskHandler.Domain.Services;
 
 namespace NotificationService.Infrastructure;
 
@@ -19,6 +20,23 @@ public static class DependencyInjection
             return new TelegramService(options.Value, logger);
         });
 
+        BindEmail(services);
+        BindRedis(services);
+
+        return services;
+    }
+
+    private static void BindEmail(IServiceCollection services)
+    {
+        services.AddSingleton<IEmailSender>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<EmailSettings>>();
+            return new SmtpEmailSender(options);
+        });
+    }
+
+    private static void BindRedis(IServiceCollection services)
+    {
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<DbSettings>>();
@@ -35,7 +53,5 @@ public static class DependencyInjection
             sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
         
         services.AddScoped<IRedisService, RedisService>();
-        
-        return services;
     }
 }
