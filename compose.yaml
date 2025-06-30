@@ -1,0 +1,37 @@
+﻿services:
+  notificationService-api:
+    image: notification-service-api
+    build:
+      dockerfile: NotificationService.Api/Dockerfile
+    ports:
+      - "10500:80"
+      - "10501:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+80;https://+443
+    entrypoint:
+      - "dotnet"
+      - "NotificationService.Api.dll"
+  redis:
+    image: redis:alpine
+    container_name: notificationService-redis
+    ports:
+      - "10550:6379"
+    volumes:
+      - notification_redis_data:/var/lib/redis/data
+    restart:
+      unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 50s
+      timeout: 2s
+      retries: 5
+    networks:
+      - notification-network
+
+volumes:
+  notification_redis_data:
+
+networks:
+  notification-network:
+    driver: bridge

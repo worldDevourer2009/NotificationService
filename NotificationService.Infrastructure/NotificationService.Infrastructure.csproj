@@ -10,7 +10,13 @@
       <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.6" />
       <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.6" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.6" />
+      <PackageReference Include="StackExchange.Redis" Version="2.8.41" />
       <PackageReference Include="Telegram.Bot" Version="22.5.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\NotificationService.Application\NotificationService.Application.csproj" />
+      <ProjectReference Include="..\NotificationService.Domain\NotificationService.Domain.csproj" />
     </ItemGroup>
 
 </Project>

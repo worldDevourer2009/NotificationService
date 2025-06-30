@@ -1,8 +1,8 @@
-namespace NotificationService.Domain.Services;
+namespace TaskHandler.Domain.Services;
 
 public interface IEmailSender
 {
-    Task SendEmailAsync(string email, string subject, string htmlMessage);
-    Task SendEmailAsync(string email, string subject, string htmlMessage, string? attachmentFilePath);
-    Task SendEmailAsync(string email, string subject, string htmlMessage, string? attachmentFilePath, string? attachmentFileName);
+    Task<bool> SendEmailAsync(string email, string subject, string message);
+    Task<bool> SendEmailAsync(string email, string subject, string message, string? htmlMessage); 
+    Task<bool> SendEmailAsync(string email, string subject, string message, string? htmlMessage, string[]? attachments);
 }
