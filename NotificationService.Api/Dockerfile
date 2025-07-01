@@ -12,6 +12,12 @@ COPY ["NotificationService.Domain/NotificationService.Domain.csproj", "Notificat
 COPY ["NotificationService.Application/NotificationService.Application.csproj", "NotificationService.Application/"]
 COPY ["NotificationService.Infrastructure/NotificationService.Infrastructure.csproj", "NotificationService.Infrastructure/"]
 COPY ["NotificationService.Shared/NotificationService.Shared.csproj", "NotificationService.Shared/"]
+ARG NUGET_TOKEN
+RUN dotnet nuget add source "https://nuget.pkg.github.com/worldDevourer2009/index.json" \
+  --name github \
+  --username worldDevourer2009 \
+  --password $NUGET_TOKEN \
+  --store-password-in-clear-text
 RUN dotnet restore "NotificationService.Api/NotificationService.Api.csproj"
 COPY . .
 WORKDIR "/src/NotificationService.Api"

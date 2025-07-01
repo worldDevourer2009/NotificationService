@@ -15,12 +15,21 @@ public class EmailController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly HttpClient _httpClient;
+    private readonly IConfiguration _configuration;
 
-    public EmailController(IMediator mediator, IHttpClientFactory factory)
+    public EmailController(IMediator mediator, IHttpClientFactory factory, IConfiguration configuration)
     {
         _mediator = mediator;
         _httpClient = factory.CreateClient("AuthService");
-        _httpClient.BaseAddress = new Uri("https://localhost:9500/");
+        _configuration = configuration;
+        
+        var baseUrl = _configuration["AuthSettings:BaseUrl"];
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            throw new InvalidOperationException("AuthSettings:BaseUrl is not configured.");
+        }
+
+        _httpClient.BaseAddress = new Uri(baseUrl);
     }
 
     [HttpPost("send")]

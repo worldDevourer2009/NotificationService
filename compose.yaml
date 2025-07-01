@@ -2,42 +2,60 @@
   notificationService-api:
     image: notification-service-api
     build:
+      context: .
       dockerfile: NotificationService.Api/Dockerfile
+      args:
+        NUGET_TOKEN: ${NUGET_TOKEN}
     ports:
-      - "10500:80"
-      - "10501:443"
+      - "10500:8080"
+      - "10501:8081"
     environment:
-      - AuthSettings__BaseUrl=https://host.docker.internal:9001
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+80;https://+443
-    entrypoint:
-      - "dotnet"
-      - "NotificationService.Api.dll"
+      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+      - AuthSettings__BaseUrl=http://authservice-api:80
+      - DbSettings__DefaultConnection=notificationService-redis:6379,ssl=false,abortConnect=false
+      - EmailSettings__SmtpServer=sandbox.smtp.mailtrap.io
+      - EmailSettings__SmtpPort=2525
+      - EmailSettings__SmtpUsername=5d0308f8286c0e
+      - EmailSettings__SmtpPassword=10e7040d944199
+      - EmailSettings__EnableSsl=true
+      - EmailSettings__FromEmail=from@example.com
+      - EmailSettings__FromName=TaskHandler App
+      - TelegramSettings__Token=7773945428:AAFhLIeFWrL0eAXK2-kBko-4EGT8g9tc0sI
+      - TelegramSettings__ChatId=892888883
+      - JwtSettings__Issuer=authService
+      - JwtSettings__Audience=taskhandler-services
+      - NotificationSettings__EnableNotifications=true
+    depends_on:
+      - redis
     networks:
       - notification-network
       - authService-network
+    restart: unless-stopped
+
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     container_name: notificationService-redis
     ports:
       - "10550:6379"
     volumes:
-      - notification_redis_data:/var/lib/redis/data
-    restart:
-      unless-stopped
+      - notification_redis_data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 50s
-      timeout: 2s
-      retries: 5
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - notification-network
+    command: redis-server --appendonly yes
 
 volumes:
   notification_redis_data:
+    driver: local
 
 networks:
   notification-network:
     driver: bridge
   authService-network:
-    external: true  
+    external: true

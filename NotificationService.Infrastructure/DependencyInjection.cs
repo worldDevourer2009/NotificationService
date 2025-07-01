@@ -16,7 +16,7 @@ public static class DependencyInjection
         BindRedis(services);
         BindEmail(services);
         
-        services.AddSingleton<ITelegramService>(sp =>
+        services.AddScoped<ITelegramService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<TelegramSettings>>();
             var logger  = sp.GetRequiredService<ILogger<TelegramService>>();
@@ -41,13 +41,13 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<DbSettings>>();
-            var config = ConfigurationOptions.Parse(settings.Value.ConnectionString!);
+            var config = ConfigurationOptions.Parse(settings.Value.DefaultConnection!);
             config.AbortOnConnectFail = false;
             config.AllowAdmin = true;
             config.ConnectTimeout = 10000;
             config.ConnectRetry = 3;
             config.AsyncTimeout = 5000;
-            return ConnectionMultiplexer.Connect(settings.Value.ConnectionString!);
+            return ConnectionMultiplexer.Connect(settings.Value.DefaultConnection!);
         });
 
         services.AddSingleton(sp => 

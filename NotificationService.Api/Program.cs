@@ -36,10 +36,7 @@ var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenLocalhost(10500, op =>
-    {
-        op.UseHttps();
-    } );
+    options.ListenAnyIP(8080);
 });
 
 var handler = new HttpClientHandler
