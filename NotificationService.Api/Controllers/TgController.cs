@@ -1,10 +1,9 @@
 using System.Security.Claims;
-using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationService.Application.Commands.TelegramCommandHandlers;
-using NotificationService.Shared.DTOs.TgDTOs;
+using TaskHandler.Shared.Notifications.DTOs.TgDTOs;
 
 namespace NotificationService.Api.Controllers;
 
@@ -51,45 +50,6 @@ public class TgController : ControllerBase
         }
 
         return null;
-    }
-
-    public async Task<IActionResult> Hello()
-    {
-        var userId = GetCurrentUserId();
-
-        if (userId is null)
-        {
-            return BadRequest();
-        }
-        
-        var response = await _httpClient.GetAsync($"api/user/{userId}");
-            
-        if (response.IsSuccessStatusCode)
-        {
-            var userJson = await response.Content.ReadAsStringAsync();
-            var user = JsonSerializer.Deserialize<UserDto>(userJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-                
-            return Ok(new 
-            { 
-                Success = true,
-                UserId = userId,
-                UserData = user,
-                Message = "Successfully fetched user data from AuthService"
-            });
-        }
-        else
-        {
-            return BadRequest(new 
-            { 
-                Success = false,
-                UserId = userId,
-                StatusCode = response.StatusCode,
-                Message = "Failed to fetch user from AuthService"
-            });
-        }
     }
 }
 

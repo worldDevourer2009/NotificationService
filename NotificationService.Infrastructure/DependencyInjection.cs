@@ -13,15 +13,16 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
+        BindRedis(services);
+        BindEmail(services);
+        
         services.AddSingleton<ITelegramService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<TelegramSettings>>();
             var logger  = sp.GetRequiredService<ILogger<TelegramService>>();
-            return new TelegramService(options.Value, logger);
+            var redisService = sp.GetRequiredService<IRedisService>();
+            return new TelegramService(options.Value, redisService, logger );
         });
-
-        BindEmail(services);
-        BindRedis(services);
 
         return services;
     }

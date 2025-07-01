@@ -2,7 +2,8 @@ namespace NotificationService.Domain.Services;
 
 public interface ITelegramService
 {
-    Task SendTelegramMessageAsync(string message);
-    Task SendTelegramMessageAsync(string message, string? attachmentFilePath);
-    Task SendTelegramMessageAsync(string message, string? attachmentFilePath, string? attachmentFileName);
+    Task StartBotAsync(CancellationToken cancellationToken = default);
+    Task SendTelegramMessageAsync(string message, CancellationToken cancellationToken = default);
+    Task SendTelegramMessageAsync(string message, string? attachmentFilePath, CancellationToken cancellationToken = default);
+    Task SendTelegramMessageAsync(string message, string? attachmentFilePath, string? attachmentFileName, CancellationToken cancellationToken = default);
 }

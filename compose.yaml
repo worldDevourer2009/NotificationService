@@ -7,11 +7,15 @@
       - "10500:80"
       - "10501:443"
     environment:
+      - AuthSettings__BaseUrl=https://host.docker.internal:9001
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+80;https://+443
     entrypoint:
       - "dotnet"
       - "NotificationService.Api.dll"
+    networks:
+      - notification-network
+      - authService-network
   redis:
     image: redis:alpine
     container_name: notificationService-redis
@@ -35,3 +39,5 @@ volumes:
 networks:
   notification-network:
     driver: bridge
+  authService-network:
+    external: true  
