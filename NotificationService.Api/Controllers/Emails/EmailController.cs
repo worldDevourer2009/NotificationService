@@ -4,7 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationService.Application.Commands.Emails;
-using TaskHandler.Application.DTOs;
+using TaskHandler.Shared.Notifications.DTOs;
 
 namespace NotificationService.Api.Controllers.Emails;
 

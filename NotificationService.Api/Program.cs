@@ -27,6 +27,13 @@ builder.Services
     .AddOptions<TelegramSettings>()
     .Bind(builder.Configuration.GetSection("TelegramSettings"));
 
+builder.Services
+    .AddOptions<AuthSettings>()
+    .Bind(builder.Configuration.GetSection("AuthSettings"));
+
+var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
+              ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
+
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(10500, op =>
@@ -42,7 +49,7 @@ var handler = new HttpClientHandler
 
 var httpClient = new HttpClient(handler);
 var rsa = RSA.Create();
-var publicKeyPem = await httpClient.GetStringAsync("https://localhost:9500/.well-known/public-key.pem");
+var publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
 rsa.ImportFromPem(publicKeyPem);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
