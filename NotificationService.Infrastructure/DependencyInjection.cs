@@ -10,7 +10,6 @@ using NotificationService.Infrastructure.Kafka.Producers;
 using NotificationService.Infrastructure.Services;
 using NotificationService.Infrastructure.SignalR;
 using StackExchange.Redis;
-using TaskHandler.Domain.Services;
 
 namespace NotificationService.Infrastructure;
 
@@ -80,7 +79,8 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<EmailSettings>>();
-            return new SmtpEmailSender(options);
+            var logger = sp.GetRequiredService<ILogger<MailKitEmailSender>>();
+            return new MailKitEmailSender(options, logger);
         });
     }
 

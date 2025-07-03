@@ -1,4 +1,4 @@
-using TaskHandler.Domain.Services;
+using NotificationService.Domain.Services;
 
 namespace NotificationService.Application.Commands.Emails;
 

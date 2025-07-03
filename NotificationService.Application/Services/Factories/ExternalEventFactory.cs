@@ -16,7 +16,7 @@ public class ExternalEventFactory : IExternalEventFactory
 
     private void RegisterEvents()
     {
-        _eventFactories[AuthEventTypes.UserLoggedIn] = (eventType, eventData, source) =>
+        _eventFactories[AuthEventTypes.UserSignedUp] = (eventType, eventData, source) =>
             new UserSignedUpExternalEvent(eventType, eventData, source);
         
         _eventFactories[AuthEventTypes.UserLoggedIn] = (eventType, eventData, source) =>
