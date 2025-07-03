@@ -26,11 +26,13 @@
       - JwtSettings__Issuer=authService
       - JwtSettings__Audience=taskhandler-services
       - NotificationSettings__EnableNotifications=true
+      - Kafka__BootstrapServers=kafka:29092
     depends_on:
       - redis
     networks:
       - notification-network
       - authService-network
+      - microservices
     restart: unless-stopped
 
   redis:
@@ -59,3 +61,5 @@ networks:
     driver: bridge
   authService-network:
     external: true
+  microservices:
+    external: true  

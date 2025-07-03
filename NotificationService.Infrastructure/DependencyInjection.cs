@@ -1,9 +1,14 @@
+using Confluent.Kafka;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NotificationService.Application.Configurations;
+using NotificationService.Application.Interfaces;
 using NotificationService.Domain.Services;
+using NotificationService.Infrastructure.Kafka.Producers;
 using NotificationService.Infrastructure.Services;
+using NotificationService.Infrastructure.SignalR;
 using StackExchange.Redis;
 using TaskHandler.Domain.Services;
 
@@ -15,7 +20,21 @@ public static class DependencyInjection
     {
         BindRedis(services);
         BindEmail(services);
+        BindTelegram(services);
+        BindKafkaProducer(services);
+        BindSignalR(services);
         
+        return services;
+    }
+
+    private static void BindSignalR(IServiceCollection services)
+    {
+        services.AddSignalR();
+        services.AddScoped<Hub, NotificationHub>();
+    }
+
+    private static void BindTelegram(IServiceCollection services)
+    {
         services.AddScoped<ITelegramService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<TelegramSettings>>();
@@ -23,8 +42,37 @@ public static class DependencyInjection
             var redisService = sp.GetRequiredService<IRedisService>();
             return new TelegramService(options.Value, redisService, logger );
         });
+    }
 
-        return services;
+    private static void BindKafkaProducer(IServiceCollection services)
+    {
+        services.AddSingleton<IProducer<string, string>>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<KafkaSettings>>().Value;
+
+            if (string.IsNullOrEmpty(options.BootstrapServers))
+            {
+                throw new InvalidOperationException("KafkaSettings:BootstrapServers is not configured.");
+            }
+            
+            var kafkaConfig = new ProducerConfig
+            {
+                BootstrapServers = options.BootstrapServers,
+                ClientId = options.ClientId,
+                MessageTimeoutMs = options.MessageTimeoutMs,
+            };
+
+            var producerBuilder = new ProducerBuilder<string, string>(kafkaConfig);
+            return producerBuilder.Build();
+        });
+        
+        services.AddSingleton<IKafkaProducer>(sp =>
+        {
+            var producer = sp.GetRequiredService<IProducer<string, string>>();
+            var logger = sp.GetRequiredService<ILogger<KafkaProducer>>();
+            
+            return new KafkaProducer(producer, logger);
+        });
     }
 
     private static void BindEmail(IServiceCollection services)

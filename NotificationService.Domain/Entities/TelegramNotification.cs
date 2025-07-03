@@ -6,18 +6,15 @@ public class TelegramNotification : Notification
     {
     }
     
-    public static TelegramNotification Create(string title, string body, string imageUrl, string targetUrl,
-        string targetType, string sender, string receiver)
+    public static TelegramNotification Create(string title, string body, string sender, string receiver, bool isRead)
     {
         return new TelegramNotification
         {
             Title = title,
             Body = body,
-            ImageUrl = imageUrl,
-            TargetUrl = targetUrl,
-            TargetType = targetType,
             Sender = sender,
-            Receiver = receiver
+            Receiver = receiver,
+            IsRead = isRead
         };
     }
 }

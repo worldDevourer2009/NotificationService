@@ -2,25 +2,19 @@ namespace NotificationService.Domain.Entities;
 
 public class EmailNotification : Notification
 {
-    public string? Subject { get; set; }
-    public string? HtmlBody { get; set; }
-    
     public EmailNotification() : base()
     {
     }
     
-    public static EmailNotification Create(string title, string body, string imageUrl, string targetUrl,
-        string targetType, string sender, string receiver)
+    public static EmailNotification Create(string title, string body, string sender, string receiver, bool isRead)
     {
         return new EmailNotification
         {
             Title = title,
             Body = body,
-            ImageUrl = imageUrl,
-            TargetUrl = targetUrl,
-            TargetType = targetType,
             Sender = sender,
-            Receiver = receiver
+            Receiver = receiver,
+            IsRead = isRead
         };
     }
 }

@@ -21,7 +21,7 @@ public class NotifyTelegramCommandHandler : ICommandHandler<NotifyTelegramComman
             return new NotifyTelegramCommandResponse(false, "Message is null");
         }
         
-        await _telegramService.SendTelegramMessageAsync(request.Message);
+        await _telegramService.SendTelegramMessageAsync("1", request.Message, cancellationToken);
         
         return new NotifyTelegramCommandResponse(true, "Message sent");
     }
