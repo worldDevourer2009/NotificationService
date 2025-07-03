@@ -1,4 +1,4 @@
-namespace NotificationService.Domain.Entities;
+namespace NotificationService.Domain.VO;
 
 public abstract class ValueObject
 {

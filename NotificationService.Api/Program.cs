@@ -31,6 +31,10 @@ builder.Services
     .AddOptions<AuthSettings>()
     .Bind(builder.Configuration.GetSection("AuthSettings"));
 
+builder.Services
+    .AddOptions<KafkaSettings>()
+    .Bind(builder.Configuration.GetSection("Kafka"));
+
 var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
               ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
 

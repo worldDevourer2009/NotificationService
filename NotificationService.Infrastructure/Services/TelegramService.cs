@@ -182,18 +182,18 @@ public class TelegramService : ITelegramService
     {
     }
 
-    public async Task SendTelegramMessageAsync(string message, CancellationToken cancellationToken = default)
+    public async Task SendTelegramMessageAsync(string chatId, string message, CancellationToken cancellationToken = default)
     {
         var messageToSend = await _botClient.SendMessage(1, message, cancellationToken: cancellationToken);
     }
 
-    public async Task SendTelegramMessageAsync(string message, string? attachmentFilePath,
+    public async Task SendTelegramMessageAsync(string chatId, string message, string? attachmentFilePath,
         CancellationToken cancellationToken = default)
     {
         var messageToSend = await _botClient.SendMessage(1, message, cancellationToken: cancellationToken);
     }
 
-    public async Task SendTelegramMessageAsync(string message, string? attachmentFilePath, string? attachmentFileName,
+    public async Task SendTelegramMessageAsync(string chatId, string message, string? attachmentFilePath, string? attachmentFileName,
         CancellationToken cancellationToken = default)
     {
         var messageToSend = await _botClient.SendMessage(1, message, cancellationToken: cancellationToken);
