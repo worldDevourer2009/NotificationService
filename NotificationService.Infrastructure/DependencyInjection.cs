@@ -22,8 +22,14 @@ public static class DependencyInjection
         BindTelegram(services);
         BindKafkaProducer(services);
         BindSignalR(services);
+        BindNotificationService(services);
         
         return services;
+    }
+
+    private static void BindNotificationService(IServiceCollection services)
+    {
+        services.AddScoped<INotificationService, Services.NotificationService>();
     }
 
     private static void BindSignalR(IServiceCollection services)

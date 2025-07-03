@@ -28,7 +28,12 @@
       - NotificationSettings__EnableNotifications=true
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
-      - redis
+      authService-api:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - notification-network
       - authService-network

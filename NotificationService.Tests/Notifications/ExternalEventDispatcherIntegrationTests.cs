@@ -6,6 +6,7 @@ using NotificationService.Application.ExternalEvents.EventHandlers;
 using NotificationService.Application.ExternalEvents.ExternalEventHandlers;
 using NotificationService.Application.Interfaces;
 using NotificationService.Application.Services.EventDispatchers;
+using NotificationService.Domain.Services;
 using Xunit.Abstractions;
 
 namespace NotificationService.Tests.Notifications;
@@ -23,6 +24,8 @@ public class ExternalEventDispatcherIntegrationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddSingleton(_loggerMock.Object);
+        var motificationService = new Mock<INotificationService>();
+        services.AddSingleton(motificationService.Object);
         var handlerLoggerMock = new Mock<ILogger<UserSignedUpExternalEventHandler>>();
         services.AddSingleton(handlerLoggerMock.Object);
         services.AddTransient<UserSignedUpExternalEventHandler>();
@@ -37,7 +40,7 @@ public class ExternalEventDispatcherIntegrationTests : IDisposable
     {
         // Arrange
         var dispatcher = _serviceProvider.GetRequiredService<IExternalEventDispatcher>();
-        var testEvent = new UserSignedUpExternalEvent("user.signed.up", "test data", "test source");
+        var testEvent = UserSignedUpExternalEvent.Create("user.signed.up", "test data", "test source");
 
         // Act
         await dispatcher.DispatchAsync(testEvent);

@@ -16,16 +16,9 @@ public class ExternalEventFactory : IExternalEventFactory
 
     private void RegisterEvents()
     {
-        _eventFactories[AuthEventTypes.UserSignedUp] = (eventType, eventData, source) =>
-            new UserSignedUpExternalEvent(eventType, eventData, source);
-        
-        _eventFactories[AuthEventTypes.UserLoggedIn] = (eventType, eventData, source) =>
-            new UserLoggedInExternalEvent(eventType, eventData, source);
-        
-        _eventFactories[AuthEventTypes.UserLoggedOut] = (eventType, eventData, source) =>
-            new UserLoggedOutExternalEvent(eventType, eventData, source);
-        
-        
+        _eventFactories[AuthEventTypes.UserSignedUp] = UserSignedUpExternalEvent.Create;
+        _eventFactories[AuthEventTypes.UserLoggedIn] = UserLoggedInExternalEvent.Create;
+        _eventFactories[AuthEventTypes.UserLoggedOut] = UserLoggedOutExternalEvent.Create;
     }
 
     public Task<IExternalEvent> CreateEventAsync(string eventType, string eventData, string source)
