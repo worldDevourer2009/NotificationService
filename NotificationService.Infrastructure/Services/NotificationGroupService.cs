@@ -50,7 +50,7 @@ public class NotificationGroupService : INotificationGroupService
         }
     }
 
-    public async Task<List<NotificationGroupEntity>> GetGroupsForUserAsync(string userId,
+    public async Task<List<NotificationGroupEntity>?> GetGroupsForUserAsync(string userId,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Getting all notification groups for user {UserId}", userId);
@@ -60,7 +60,7 @@ public class NotificationGroupService : INotificationGroupService
             if (!Guid.TryParse(userId, out var guid))
             {
                 _logger.LogWarning("User id {UserId} is not a valid guid", userId);
-                return new List<NotificationGroupEntity>();
+                return null;
             }
             
             var groups = await _notificationGroupRepository.GetAllNotificationGroupsForUserAsync(guid, cancellationToken);
@@ -71,7 +71,7 @@ public class NotificationGroupService : INotificationGroupService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while getting notification groups for user {UserId}", userId);
-            return new List<NotificationGroupEntity>();
+            return null;
         }
     }
     
