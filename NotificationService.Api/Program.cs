@@ -1,6 +1,11 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NotificationService.Api.Middleware.Exceptions;
 using NotificationService.Application;
@@ -49,122 +54,147 @@ builder.Services
 
 // Get public key for auth
 
-var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
-              ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
+var isTestEnvironment = builder.Environment.IsEnvironment("Testing");
 
-builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(10500); });
-
-var handler = new HttpClientHandler
+if (isTestEnvironment)
 {
-    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-};
+    builder.Services.AddAuthentication("Test")
+        .AddScheme<TestAuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
+}
+else
+{
+    var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
+                  ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
 
-var httpClient = new HttpClient(handler);
-var rsa = RSA.Create();
-var publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
-rsa.ImportFromPem(publicKeyPem);
+    builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(10500); });
+
+    var handler = new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+
+    var httpClient = new HttpClient(handler);
+    var rsa = RSA.Create();
+    var publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
+    rsa.ImportFromPem(publicKeyPem);
 
 // Setup auth
 
-builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+    builder.Services.AddAuthentication(options =>
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new RsaSecurityKey(rsa),
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero,
-            ValidIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "test-issuer",
-            ValidAudience = builder.Configuration["JwtSettings:Audience"] ?? "test-audience",
-        };
-
-        options.Events = new JwtBearerEvents
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
         {
-            OnMessageReceived = context =>
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                if (string.IsNullOrEmpty(context.Token))
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new RsaSecurityKey(rsa),
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero,
+                ValidIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "test-issuer",
+                ValidAudience = builder.Configuration["JwtSettings:Audience"] ?? "test-audience",
+            };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
                 {
-                    context.Token = context.Request.Cookies["accessToken"];
+                    if (string.IsNullOrEmpty(context.Token))
+                    {
+                        context.Token = context.Request.Cookies["accessToken"];
+                    }
+
+                    return Task.CompletedTask;
+                },
+                OnAuthenticationFailed = context =>
+                {
+                    Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    Console.WriteLine("Token validated successfully");
+                    return Task.CompletedTask;
                 }
-
-                return Task.CompletedTask;
-            },
-            OnAuthenticationFailed = context =>
-            {
-                Console.WriteLine($"Authentication failed: {context.Exception.Message}");
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = context =>
-            {
-                Console.WriteLine("Token validated successfully");
-                return Task.CompletedTask;
-            }
-        };
-    })
-    .AddJwtBearer("ServiceScheme", options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+            };
+        })
+        .AddJwtBearer("ServiceScheme", options =>
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new RsaSecurityKey(rsa),
-            ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["AuthSettings:Issuer"],
-            ValidateAudience = true,
-            ValidAudience = builder.Configuration["AuthSettings:Audience"],
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = ctx =>
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                var logger = ctx.HttpContext.RequestServices
-                    .GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("ServiceSchemeAuth");
-
-                var svcName = ctx.Principal?.FindFirst("service_name")?.Value ?? "unknown";
-
-                logger.LogWarning(
-                    "ServiceScheme auth failed. Scheme={Scheme}, service_name={ServiceName}, Exception={Error}",
-                    ctx.Scheme,
-                    svcName,
-                    ctx.Exception.Message);
-
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = ctx =>
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new RsaSecurityKey(rsa),
+                ValidateIssuer = true,
+                ValidIssuer = builder.Configuration["AuthSettings:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = builder.Configuration["AuthSettings:Audience"],
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
+            options.Events = new JwtBearerEvents
             {
-                var logger = ctx.HttpContext.RequestServices
-                    .GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("ServiceSchemeAuthValidated");
+                OnAuthenticationFailed = ctx =>
+                {
+                    var logger = ctx.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("ServiceSchemeAuth");
 
-                var svcName = ctx.Principal!.FindFirst("service_name")!.Value;
-                
-                logger.LogInformation("ServiceScheme token validated for {ServiceName}", svcName);
-                
-                return Task.CompletedTask;
-            }
-        };
-    });
-;
+                    var svcName = ctx.Principal?.FindFirst("service_name")?.Value ?? "unknown";
+
+                    logger.LogWarning(
+                        "ServiceScheme auth failed. Scheme={Scheme}, service_name={ServiceName}, Exception={Error}",
+                        ctx.Scheme,
+                        svcName,
+                        ctx.Exception.Message);
+
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = ctx =>
+                {
+                    var logger = ctx.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("ServiceSchemeAuthValidated");
+
+                    var svcName = ctx.Principal!.FindFirst("service_name")!.Value;
+
+                    logger.LogInformation("ServiceScheme token validated for {ServiceName}", svcName);
+
+                    return Task.CompletedTask;
+                }
+            };
+        });
+}
 
 // Setup authorization
 
 builder.Services.AddAuthorization(options =>
 {
+    if (isTestEnvironment)
+    {
+        options.DefaultPolicy = new AuthorizationPolicyBuilder()
+            .AddAuthenticationSchemes("Test")
+            .RequireAuthenticatedUser()
+            .Build();
+    }
+    
     options.AddPolicy("OnlyServices", policy =>
     {
-        policy.AddAuthenticationSchemes("ServiceScheme");
-        policy.RequireClaim("scope", "internal_api");
+        if (isTestEnvironment)
+        {
+            policy.AddAuthenticationSchemes("Test");
+        }
+        else
+        {
+            policy.AddAuthenticationSchemes("ServiceScheme");
+            policy.RequireClaim("scope", "internal_api");
+        }
     });
 });
+
 
 // Setup cors
 
@@ -212,3 +242,35 @@ app.UseAuthorization();
 app.UseHttpsRedirection();
 app.MapControllers();
 app.Run();
+
+public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticationSchemeOptions>
+{
+    public TestAuthenticationHandler(IOptionsMonitor<TestAuthenticationSchemeOptions> options,
+        ILoggerFactory logger, UrlEncoder encoder) : base(options, logger, encoder)
+    {
+    }
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
+            new Claim("sub", "test-user-id"),
+            new Claim("userId", "test-user-id"),
+            new Claim(ClaimTypes.Name, "Test User"),
+            new Claim("scope", "internal_api")
+        };
+
+        var identity = new ClaimsIdentity(claims, "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, "Test");
+
+        return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+}
+
+public class TestAuthenticationSchemeOptions : AuthenticationSchemeOptions
+{
+}
+
+public partial class Program;

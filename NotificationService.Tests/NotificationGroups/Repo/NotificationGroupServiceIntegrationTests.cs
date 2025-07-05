@@ -99,7 +99,7 @@ public class NotificationGroupServiceIntegrationTests : BaseIntegrationTest
         var result = await _service.GetGroupsForUserAsync(invalidUserId);
 
         // Assert
-        Assert.Empty(result);
+        Assert.Null(result);
 
         await CleanupDatabaseAsync();
     }
