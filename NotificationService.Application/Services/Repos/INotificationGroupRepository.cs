@@ -19,4 +19,6 @@ public interface INotificationGroupRepository
 
     Task<bool> UpdateNotificationGroupForUserAsync(Guid notificationId, NotificationGroupEntity notificationGroup,
         CancellationToken cancellationToken = default);
+    
+    Task<NotificationGroupEntity?> GetNotificationGroupByIdAsync(Guid groupId, CancellationToken cancellationToken = default);
 }

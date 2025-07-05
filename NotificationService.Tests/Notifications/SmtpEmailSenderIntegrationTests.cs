@@ -127,7 +127,7 @@ public class SmtpEmailSenderIntegrationTests : IDisposable
 
         // Assert
         _output.WriteLine($"Email with attachment sending test result: {result}");
-        result.Should().BeTrue();
+        Assert.True(result);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class SmtpEmailSenderIntegrationTests : IDisposable
 
         // Assert
         _output.WriteLine($"Invalid configuration test result: {result}");
-        result.Should().BeFalse();
+        Assert.False(result);
     }
 
     [Fact]

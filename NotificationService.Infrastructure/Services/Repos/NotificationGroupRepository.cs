@@ -26,11 +26,14 @@ public class NotificationGroupRepository : INotificationGroupRepository
         try
         {
             var allGroups = await _applicationDbContext.NotificationGroups
-                .Where(x => x.Members.Contains(userId.ToString()))
                 .ToListAsync(cancellationToken);
-
-            _logger.LogInformation("Got {Count} notification groups for user {Id}", allGroups.Count, userId.ToString());
-            return allGroups;
+            
+            var userGroups = allGroups
+                .Where(g => g.Members.Contains(userId.ToString()))
+                .ToList();
+            
+            _logger.LogInformation("Got {Count} notification groups for user {Id}", userGroups.Count, userId.ToString());
+            return userGroups;
         }
         catch (Exception ex)
         {
@@ -90,9 +93,12 @@ public class NotificationGroupRepository : INotificationGroupRepository
                 return false;
             }
 
-            if (await _applicationDbContext.NotificationGroups.ContainsAsync(notificationGroup, cancellationToken))
+            var existingGroup = await _applicationDbContext.NotificationGroups
+                .FirstOrDefaultAsync(x => x.Id == notificationGroup.Id, cancellationToken);
+            
+            if (existingGroup != null)
             {
-                _logger.LogError("Notification group for user {Id} already exists", notificationGroup.Creator);
+                _logger.LogError("Notification group with ID {GroupId} already exists", notificationGroup.Id);
                 return false;
             }
 
@@ -184,14 +190,11 @@ public class NotificationGroupRepository : INotificationGroupRepository
                 return false;
             }
             
-            var allMembers = dbGroup.Members.ToList();
-
+            dbGroup.Members.Clear();
+            
             foreach (var member in notificationGroup.Members)
             {
-                if (!allMembers.Contains(member))
-                {
-                    allMembers.Add(member);
-                }
+                dbGroup.Members.Add(member);
             }
 
             if (dbGroup.Name != notificationGroup.Name)
@@ -204,6 +207,8 @@ public class NotificationGroupRepository : INotificationGroupRepository
                 dbGroup.UpdateDescription(notificationGroup.Description);
             }
             
+            await _applicationDbContext.SaveChangesAsync(cancellationToken);
+            
             _logger.LogInformation("Updating notification group for user {Id}", notificationId.ToString());
             return true;
         }
@@ -211,6 +216,31 @@ public class NotificationGroupRepository : INotificationGroupRepository
         {
             _logger.LogError(ex, "Error while updating notification group for user {Id}", notificationId.ToString());
             return false;
+        }
+    }
+
+    public async Task<NotificationGroupEntity?> GetNotificationGroupByIdAsync(Guid groupId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting notification group {GroupId}", groupId);
+
+        try
+        {
+            var group = await _applicationDbContext.NotificationGroups
+                .FirstOrDefaultAsync(x => x.Id == groupId, cancellationToken);
+
+            if (group == null)
+            {
+                _logger.LogInformation("Notification group {GroupId} not found", groupId);
+                return null;
+            }
+
+            _logger.LogInformation("Found notification group {GroupId}", group.Id);
+            return group;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while getting notification group {GroupId}", groupId);
+            return null;
         }
     }
 }

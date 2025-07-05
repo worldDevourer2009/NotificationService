@@ -23,16 +23,21 @@ public class NotificationGroupService : INotificationGroupService
     public async Task<NotificationGroupEntity?> GetGroupAsync(string groupId,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting notification group for user {Id}", groupId);
+        _logger.LogInformation("Getting notification group {GroupId}", groupId);
 
         try
         {
-            var group = await _notificationGroupRepository.GetNotificationGroupForUser(Guid.Parse(groupId),
-                Guid.Parse(groupId), cancellationToken);
+            if (!Guid.TryParse(groupId, out var groupGuid))
+            {
+                _logger.LogWarning("Invalid groupId {GroupId}", groupId);
+                return null;
+            }
+            
+            var group = await _notificationGroupRepository.GetNotificationGroupByIdAsync(groupGuid, cancellationToken);
 
             if (group == null)
             {
-                _logger.LogInformation("Notification group for user {Id} not found", groupId);
+                _logger.LogInformation("Notification group {GroupId} not found", groupId);
                 return null;
             }
 
@@ -40,7 +45,7 @@ public class NotificationGroupService : INotificationGroupService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error while getting notification group for user {Id}", groupId);
+            _logger.LogError(ex, "Error while getting notification group {GroupId}", groupId);
             return null;
         }
     }
@@ -48,31 +53,28 @@ public class NotificationGroupService : INotificationGroupService
     public async Task<List<NotificationGroupEntity>> GetGroupsForUserAsync(string userId,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting all notification groups for user {Id}", userId);
+        _logger.LogInformation("Getting all notification groups for user {UserId}", userId);
 
         try
         {
-            if (Guid.TryParse(userId, out var guid))
+            if (!Guid.TryParse(userId, out var guid))
             {
-                _logger.LogInformation("User id is not a valid guid");
+                _logger.LogWarning("User id {UserId} is not a valid guid", userId);
                 return new List<NotificationGroupEntity>();
             }
             
-            var groups =
-                await _notificationGroupRepository.GetAllNotificationGroupsForUserAsync(guid,
-                    cancellationToken);
+            var groups = await _notificationGroupRepository.GetAllNotificationGroupsForUserAsync(guid, cancellationToken);
             
-            
-            _logger.LogInformation("Got {Count} notification groups for user {Id}", groups.Count, userId);
+            _logger.LogInformation("Got {Count} notification groups for user {UserId}", groups.Count, userId);
             return groups;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error while getting notification groups for user {Id}", userId);
+            _logger.LogError(ex, "Error while getting notification groups for user {UserId}", userId);
             return new List<NotificationGroupEntity>();
         }
     }
-
+    
     public async Task<bool> CreateGroupAsync(NotificationGroupEntity group,
         CancellationToken cancellationToken = default)
     {
@@ -115,13 +117,21 @@ public class NotificationGroupService : INotificationGroupService
 
         try
         {
-            var group = await _notificationGroupRepository.GetNotificationGroupForUser(Guid.Parse(groupId),
-                Guid.Parse(userId), cancellationToken);
+            var group = await _notificationGroupRepository.GetNotificationGroupForUser(
+                Guid.Parse(groupId),
+                Guid.Parse(groupId),
+                cancellationToken);
             
             if (group == null)
             {
                 _logger.LogError("Notification group for user {Id} not found", groupId);
                 return false;
+            }
+            
+            if (group.Members.Contains(userId))
+            {
+                _logger.LogInformation("User {UserId} is already a member of group {GroupId}", userId, groupId);
+                return true;
             }
             
             group.Members.Add(userId);
@@ -151,8 +161,9 @@ public class NotificationGroupService : INotificationGroupService
 
         try
         {
-            var group = await _notificationGroupRepository.GetNotificationGroupForUser(Guid.Parse(groupId),
-                Guid.Parse(userId), cancellationToken);
+            var group = await _notificationGroupRepository.GetNotificationGroupByIdAsync(
+                Guid.Parse(groupId),
+                cancellationToken);
             
             if (group == null)
             {
@@ -198,7 +209,7 @@ public class NotificationGroupService : INotificationGroupService
                 return false;
             }
             
-            var result = await _notificationGroupRepository.DeleteNotificationGroupForUserAsync(Guid.Parse(groupId), cancellationToken);
+            var result = await _notificationGroupRepository.DeleteNotificationGroupForUserAsync(groupGuid, cancellationToken);
             
             if (!result)
             {
@@ -206,7 +217,7 @@ public class NotificationGroupService : INotificationGroupService
                 return false;
             }
             
-            await RemoveAllUsersFromSignalRGroupAsync(groupId, [groupId]);
+            await RemoveAllUsersFromSignalRGroupAsync(groupId, group.Members);
             
             _logger.LogInformation("Deleted notification group for user {Id}", groupId);
             return true;
@@ -265,11 +276,6 @@ public class NotificationGroupService : INotificationGroupService
     {
         foreach (var member in members)
         {
-            if (Guid.TryParse(member, out var guid))
-            {
-                continue;
-            }
-            
             await RemoveUserFromSignalRGroupAsync(groupId, member);
         }
     }
