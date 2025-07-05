@@ -9,7 +9,7 @@ public abstract class Notification : Entity
     public bool? IsRead { get; protected set; }
     public bool? IsDeleted { get; protected set; }
     public bool? IsSent { get; protected set; }
-    public DateTime? CreatedAt { get; private set; }
+    public DateTime? CreatedAt { get; protected set; }
 
     public void MarkAsRead()
     {
@@ -19,6 +19,36 @@ public abstract class Notification : Entity
     public void MarkAsDeleted()
     {
         IsDeleted = true;
+    }
+
+    public void SetNewTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title == Title)
+        {
+            return;
+        }
+        
+        Title = title;   
+    }
+
+    public void SetNewBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body == Body)
+        {
+            return;
+        }
+        
+        Body = body;
+    }
+
+    public void SetNewSender(string sender)
+    {
+        if (string.IsNullOrWhiteSpace(sender) || sender == Sender)
+        {
+            return;
+        }
+        
+        Sender = sender;
     }
     
     public void MarkAsSent()

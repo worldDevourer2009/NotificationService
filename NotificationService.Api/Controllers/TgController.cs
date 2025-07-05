@@ -19,7 +19,7 @@ public class TgController : ControllerBase
     {
         _mediator = mediator;
         _httpClient = factory.CreateClient("AuthService");
-        _httpClient.BaseAddress = new Uri("https://localhost:9500/");
+        _httpClient.BaseAddress = new Uri("http://authservice-api/");
     }
 
     [HttpPost("send-notification")]

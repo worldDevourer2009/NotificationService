@@ -1,15 +1,22 @@
 using Confluent.Kafka;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NotificationService.Application.Configurations;
 using NotificationService.Application.Interfaces;
+using NotificationService.Application.Services.Repos;
 using NotificationService.Domain.Services;
+using NotificationService.Infrastructure.Interfaces;
+using NotificationService.Infrastructure.Kafka.Consumers.AuthService;
 using NotificationService.Infrastructure.Kafka.Producers;
+using NotificationService.Infrastructure.Persistence;
 using NotificationService.Infrastructure.Services;
+using NotificationService.Infrastructure.Services.Repos;
 using NotificationService.Infrastructure.SignalR;
 using StackExchange.Redis;
+using TaskHandler.Shared.Kafka.Topics.AuthServiceTopics;
 
 namespace NotificationService.Infrastructure;
 
@@ -23,13 +30,43 @@ public static class DependencyInjection
         BindKafkaProducer(services);
         BindSignalR(services);
         BindNotificationService(services);
-        
+        BindKafkaConsumers(services);
+        BindDB(services);
+        return services;
+    }
+
+    private static void BindDB(IServiceCollection services)
+    {
+        services.AddScoped<IApplicationDbContext, AppDbContext>();
+        services.AddScoped<IInternalNotificationRepository, InternalNotificationRepository>();
+        services.AddScoped<INotificationGroupRepository, NotificationGroupRepository>();
+    }
+
+    private static void BindKafkaConsumers(IServiceCollection services)
+    {
+        var authTopics = new string[]
+        {
+            AuthServiceTopics.AuthServiceUserLoggedIn,
+            AuthServiceTopics.AuthServiceUserLoggedOut,
+            AuthServiceTopics.AuthServiceUserSignedUp
+        };
+
+        AddKafkaConsumer<AuthServiceEventConsumer>(services, authTopics);
+    }
+    
+    
+    private static IServiceCollection AddKafkaConsumer<TConsumer>(IServiceCollection services, IEnumerable<string> topics)
+        where TConsumer : class, IHostedService
+    {
+        services.AddSingleton<IEnumerable<string>>(sp => topics);
+        services.AddHostedService<TConsumer>();
         return services;
     }
 
     private static void BindNotificationService(IServiceCollection services)
     {
         services.AddScoped<INotificationService, Services.NotificationService>();
+        services.AddScoped<INotificationGroupService, NotificationGroupService>();
     }
 
     private static void BindSignalR(IServiceCollection services)

@@ -1,75 +1,61 @@
 using System.Security.Claims;
 using System.Text.Json;
 using MediatR;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NotificationService.Application.Commands.Emails;
-using TaskHandler.Shared.Notifications.DTOs;
+using NotificationService.Application.Commands.InternalNotificationsCommandHandlers;
 
-namespace NotificationService.Api.Controllers.Emails;
+namespace NotificationService.Api.Controllers;
+
+public record IntNotifDto(string Message, string Title = "Internal Notification");
 
 [ApiController]
-[Authorize(Policy = "OnlyServices", 
-    AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme + ",ServiceScheme")]
+[Authorize]
 [Route("api/[controller]")]
-public class EmailController : ControllerBase
+public class IntNotifController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
 
-    public EmailController(IMediator mediator, IHttpClientFactory factory, IConfiguration configuration)
+    public IntNotifController(IMediator mediator, HttpClient httpClient)
     {
         _mediator = mediator;
-        _httpClient = factory.CreateClient("AuthService");
-        _configuration = configuration;
-        
-        var baseUrl = _configuration["AuthSettings:BaseUrl"];
-        if (string.IsNullOrEmpty(baseUrl))
-        {
-            throw new InvalidOperationException("AuthSettings:BaseUrl is not configured.");
-        }
-
-        _httpClient.BaseAddress = new Uri(baseUrl);
+        _httpClient = httpClient;
+        _httpClient.BaseAddress = new Uri("http://authservice-api/");
     }
 
-    [HttpPost("send")]
+    [HttpPost("int-notif-send")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> SendEmail([FromBody] EmailRequestDTO emailRequestDto)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendNotification([FromBody] IntNotifDto request)
     {
-        var userId = GetCurrentUserId();
+        var userid = GetCurrentUserId();
 
-        if (userId is null)
+        if (userid is null)
         {
             return Unauthorized();
         }
         
-        var user = await GetUser(userId);
+        var user = await GetUser(userid);
 
         if (user is null)
         {
-            return Unauthorized();       
+            return Unauthorized();
         }
         
-        var command = new SendEmailCommand(
-            user.Email,
-            emailRequestDto.Subject,
-            emailRequestDto.Message,
-            emailRequestDto.HtmlMessage,
-            null);
+        var command = new InternalNotificationCommand(user.Id, request.Message, request.Title);
         
-        var result = await _mediator.Send(command);
+        var response = await _mediator.Send(command);
 
-        if (!result.Success)
+        if (!response.Success)
         {
-            return BadRequest("Can't send email");
+            return BadRequest(response.Message);
         }
-
-        return Ok("Email sent successfully to " + user.Email + "");
+        
+        return Ok(response.Message);
     }
-
+    
     private async Task<UserDto?> GetUser(string id)
     {
         var response = await _httpClient.GetAsync($"api/user/{id}");

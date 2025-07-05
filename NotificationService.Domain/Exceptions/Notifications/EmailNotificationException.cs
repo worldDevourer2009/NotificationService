@@ -1,8 +1,12 @@
 namespace NotificationService.Domain.Exceptions.Notifications;
 
-public class EmailNotificationException : Exception
+public class EmailNotificationException : DomainException
 {
-    private EmailNotificationException()
+    public string Reason { get; }
+    
+    public EmailNotificationException(string reason)
+        : base($"Email notification failed because of : {reason}")
     {
+        Reason = reason;
     }
 }

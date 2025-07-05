@@ -7,18 +7,18 @@
       args:
         NUGET_TOKEN: ${NUGET_TOKEN}
     ports:
-      - "10500:8080"
-      - "10501:8081"
+      - "10500:10500"
+      - "10501:10501"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+      - ASPNETCORE_URLS=http://+:10500;https://+:10501
       - AuthSettings__BaseUrl=http://authservice-api:80
       - DbSettings__DefaultConnection=notificationService-redis:6379,ssl=false,abortConnect=false
       - EmailSettings__SmtpServer=sandbox.smtp.mailtrap.io
       - EmailSettings__SmtpPort=2525
       - EmailSettings__SmtpUsername=5d0308f8286c0e
       - EmailSettings__SmtpPassword=10e7040d944199
-      - EmailSettings__EnableSsl=true
+      - EmailSettings__EnableSsl=false
       - EmailSettings__FromEmail=from@example.com
       - EmailSettings__FromName=TaskHandler App
       - TelegramSettings__Token=7773945428:AAFhLIeFWrL0eAXK2-kBko-4EGT8g9tc0sI
@@ -28,18 +28,15 @@
       - NotificationSettings__EnableNotifications=true
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
-      authService-api:
-        condition: service_started
-      kafka:
-        condition: service_healthy
       redis:
+        condition: service_healthy
+      notification-service-db:
         condition: service_healthy
     networks:
       - notification-network
       - authService-network
       - microservices
     restart: unless-stopped
-
   redis:
     image: redis:7-alpine
     container_name: notificationService-redis
@@ -56,11 +53,29 @@
     networks:
       - notification-network
     command: redis-server --appendonly yes
-
+  notification-service-db:
+    image: postgres:15
+    container_name: notification-service-db
+    environment:
+      POSTGRES_DB: notification_service
+      POSTGRES_USER: notification_service_username
+      POSTGRES_PASSWORD: notification_service_password
+    ports:
+      - "10650:5432"
+    volumes:
+      - notification_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+     - notification-network
 volumes:
   notification_redis_data:
     driver: local
-
+  notification_postgres_data:
 networks:
   notification-network:
     driver: bridge
