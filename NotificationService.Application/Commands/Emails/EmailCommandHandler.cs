@@ -1,4 +1,4 @@
-using TaskHandler.Domain.Services;
+using NotificationService.Domain.Services;
 
 namespace NotificationService.Application.Commands.Emails;
 
@@ -13,8 +13,6 @@ public record SendEmailCommandResponse(bool Success);
 
 public class EmailCommandHandler : ICommandHandler<SendEmailCommand, SendEmailCommandResponse>
 {
-    public record User(string Email);
-    
     private readonly IEmailSender _emailSender;
 
     public EmailCommandHandler(IEmailSender emailSender)
@@ -37,7 +35,7 @@ public class EmailCommandHandler : ICommandHandler<SendEmailCommand, SendEmailCo
             request.Subject,
             request.Message,
             request.HtmlMessage,
-            request.Attachments);
+            request.Attachments, cancellationToken);
 
         return new SendEmailCommandResponse(success);
     }

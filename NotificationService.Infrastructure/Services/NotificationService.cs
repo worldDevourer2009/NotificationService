@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using NotificationService.Domain.Entities;
 using NotificationService.Domain.Services;
 using NotificationService.Infrastructure.SignalR;
-using TaskHandler.Domain.Services;
 
 namespace NotificationService.Infrastructure.Services;
 
@@ -22,7 +21,7 @@ public class NotificationService : INotificationService
         _logger = logger;
     }
 
-    public async Task SendInternalNotificationAsync(Guid userId, Notification notification)
+    public async Task SendInternalNotificationAsync(Guid userId, Notification notification,  CancellationToken cancellationToken = default)
     {
         try
         {
@@ -37,7 +36,7 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task SendInternalNotificationAsync(string groupId, Notification notification, CancellationToken cancellationToken)
+    public async Task SendInternalNotificationAsync(string groupId, Notification notification, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -50,7 +49,7 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task SendEmailNotificationAsync(string email, Notification notification)
+    public async Task SendEmailNotificationAsync(string email, Notification notification, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -62,7 +61,7 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task SendTelegramNotificationAsync(string telegramId, Notification notification)
+    public async Task SendTelegramNotificationAsync(string telegramId, Notification notification, CancellationToken cancellationToken = default)
     {
         try
         {

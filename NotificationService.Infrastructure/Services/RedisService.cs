@@ -19,7 +19,7 @@ public class RedisService : IRedisService
     {
         if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidRedisKeyException();
+            throw new InvalidRedisKeyException("Invalid key or value to set");
         }
         
         await _database.StringSetAsync(key, value);
@@ -29,7 +29,7 @@ public class RedisService : IRedisService
     {
         if (string.IsNullOrWhiteSpace(key))
         {
-            throw new InvalidRedisKeyException();
+            throw new InvalidRedisKeyException("Invalid key to get");
         }
         
         return await _database.StringGetAsync(key);
@@ -39,7 +39,7 @@ public class RedisService : IRedisService
     {
         if (string.IsNullOrWhiteSpace(key))
         {
-            throw new InvalidRedisKeyException();
+            throw new InvalidRedisKeyException("Invalid key to delete");
         }
         
         return await _database.KeyDeleteAsync(key);
@@ -49,7 +49,7 @@ public class RedisService : IRedisService
     {
         if (string.IsNullOrWhiteSpace(key))
         {
-            throw new InvalidRedisKeyException();
+            throw new InvalidRedisKeyException("Invalid key to check");
         }
         
         return await _database.KeyExistsAsync(key);

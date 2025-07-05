@@ -1,44 +1,12 @@
-using System.Runtime.Serialization;
-
 namespace NotificationService.Domain.Exceptions.Redis;
 
-[Serializable]
-public class InvalidRedisKeyException : Exception
+public class InvalidRedisKeyException : DomainException
 {
-    public string InvalidKey { get; }
+    public string Reason { get; }
     
-    public InvalidRedisKeyException(string invalidKey)
-        : base($"Invalid Redis key: {invalidKey}")
+    public InvalidRedisKeyException(string reason)
+        : base($"Redis failed for because of : {reason}")
     {
-        InvalidKey = invalidKey;
-    }
-    
-    public InvalidRedisKeyException(string message, Exception innerException)
-        : base(message, innerException)
-    {
-    }
-    
-    public InvalidRedisKeyException()
-        : base("Invalid Redis key.")
-    {
-    }
-    
-    [Obsolete("Obsolete")]
-    protected InvalidRedisKeyException(SerializationInfo info, StreamingContext context)
-        : base(info, context)
-    {
-        InvalidKey = info.GetString(nameof(InvalidKey))!;
-    }
-    
-    [Obsolete("Obsolete")]
-    public override void GetObjectData(SerializationInfo info, StreamingContext context)
-    {
-        if (info is null)
-        {
-            throw new ArgumentNullException(nameof(info));
-        }
-        
-        base.GetObjectData(info, context);
-        info.AddValue(nameof(InvalidKey), InvalidKey);
+        Reason = reason;
     }
 }

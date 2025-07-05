@@ -29,6 +29,7 @@ public class AuthServiceEventConsumer : KafkaConsumerBase
 
             try
             {
+                _logger.LogInformation("Dispatching event {EventType}", eventType);
                 await dispatcher.DispatchAsync(externalEvent);
             }
             catch (Exception ex)
