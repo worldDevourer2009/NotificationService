@@ -15,11 +15,6 @@ public class NotificationGroupEntity : Entity
 
     public static NotificationGroupEntity Create(string? name, string? description, string? creator, List<string>? members)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new NotificationGroupEntityException("Name is required");
-        }
-
         if (string.IsNullOrWhiteSpace(creator))
         {
             throw new NotificationGroupEntityException("Creator id is required");

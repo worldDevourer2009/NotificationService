@@ -3,9 +3,10 @@ using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NotificationService.Api.Controllers.Tg;
 using NotificationService.Application.Commands.InternalNotificationsCommandHandlers;
 
-namespace NotificationService.Api.Controllers;
+namespace NotificationService.Api.Controllers.InternalNotifications;
 
 public record IntNotifDto(string Message, string Title = "Internal Notification");
 

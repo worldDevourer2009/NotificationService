@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NotificationService.Api.Controllers.Tg;
 using NotificationService.Application.Commands.Emails;
 using TaskHandler.Shared.Notifications.DTOs;
 

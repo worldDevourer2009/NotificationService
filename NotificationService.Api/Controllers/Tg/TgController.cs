@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationService.Application.Commands.TelegramCommandHandlers;
 using TaskHandler.Shared.Notifications.DTOs.TgDTOs;
 
-namespace NotificationService.Api.Controllers;
+namespace NotificationService.Api.Controllers.Tg;
 
 [ApiController]
 [Authorize]
