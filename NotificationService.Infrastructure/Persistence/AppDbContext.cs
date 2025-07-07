@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using NotificationService.Domain.Entities;
 using NotificationService.Infrastructure.Interfaces;
 
@@ -76,14 +77,17 @@ public class AppDbContext : DbContext, IApplicationDbContext
             entity.Property(x => x.Description)
                 .HasColumnName("description")
                 .HasMaxLength(700);
-            
+
             entity.Property(x => x.Members)
                 .HasColumnName("members")
                 .HasColumnType("jsonb")
                 .HasConversion(
-                    x => JsonSerializer.Serialize(x, (JsonSerializerOptions?)null), 
+                    x => JsonSerializer.Serialize(x, (JsonSerializerOptions?)null),
                     x => JsonSerializer.Deserialize<List<string>>(x, (JsonSerializerOptions?)null!))
-                .IsRequired();
+                .Metadata.SetValueComparer(new ValueComparer<List<string>>(
+                    (c1, c2) => c1!.SequenceEqual(c2!),
+                    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c.ToList()));
         });
     }
 }

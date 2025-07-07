@@ -3,26 +3,28 @@ using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using NotificationService.Api.Controllers.Tg;
 using NotificationService.Application.Commands.InternalNotificationsCommandHandlers;
+using NotificationService.Application.Configurations;
 
 namespace NotificationService.Api.Controllers.InternalNotifications;
 
 public record IntNotifDto(string Message, string Title = "Internal Notification");
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "OnlyServices")]
 [Route("api/[controller]")]
 public class IntNotifController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly HttpClient _httpClient;
 
-    public IntNotifController(IMediator mediator, HttpClient httpClient)
+    public IntNotifController(IMediator mediator, IHttpClientFactory httpClientFactory, IOptions<InternalAuthSettings> internalAuthOptions)
     {
         _mediator = mediator;
-        _httpClient = httpClient;
-        _httpClient.BaseAddress = new Uri("http://authservice-api/");
+        var clientName = internalAuthOptions.Value.ServiceClientId!;
+        _httpClient = httpClientFactory.CreateClient(clientName);
     }
 
     [HttpPost("int-notif-send")]

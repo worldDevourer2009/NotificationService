@@ -2,5 +2,6 @@ namespace NotificationService.Application.Configurations;
 
 public class DbSettings
 {
-    public string? DefaultConnection { get; set; }
+    public string? RedisConnection  { get; set; }
+    public string? PostgresConnection  { get; set; }
 }

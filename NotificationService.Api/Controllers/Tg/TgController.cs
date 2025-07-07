@@ -8,7 +8,7 @@ using TaskHandler.Shared.Notifications.DTOs.TgDTOs;
 namespace NotificationService.Api.Controllers.Tg;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "OnlyServices")]
 [Route("api/[controller]")]
 public class TgController : ControllerBase
 {

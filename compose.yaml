@@ -8,12 +8,12 @@
         NUGET_TOKEN: ${NUGET_TOKEN}
     ports:
       - "10500:10500"
-      - "10501:10501"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:10500;https://+:10501
+      - ASPNETCORE_URLS=http://+:10500
       - AuthSettings__BaseUrl=http://authservice-api:80
-      - DbSettings__DefaultConnection=notificationService-redis:6379,ssl=false,abortConnect=false
+      - DbSettings__RedisConnection=notificationService-redis:6379,ssl=false,abortConnect=false
+      - DbSettings__PostgresConnection=Host=notification-service-db;Port=5432;Database=notification_service;Username=notification_service_username;Password=notification_service_password;Include Error Detail=true
       - EmailSettings__SmtpServer=sandbox.smtp.mailtrap.io
       - EmailSettings__SmtpPort=2525
       - EmailSettings__SmtpUsername=5d0308f8286c0e

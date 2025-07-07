@@ -1,27 +1,46 @@
-using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text.Encodings.Web;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NotificationService.Api.Middleware.Exceptions;
+using NotificationService.Api.Middleware.Tokens;
 using NotificationService.Application;
 using NotificationService.Application.Configurations;
 using NotificationService.Infrastructure;
 using NotificationService.Infrastructure.Persistence;
 
+using var loggerFactory = LoggerFactory.Create(logging =>
+{
+    logging.ClearProviders();
+    logging.AddConsole();
+    logging.AddDebug();
+    logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Information);
+});
+var startupLogger = loggerFactory.CreateLogger<Program>();
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Bind DbContext
+// Logging
+builder.Logging
+    .ClearProviders()
+    .AddConsole()
+    .AddDebug();
 
-builder.Services.AddNpgsql<AppDbContext>(
-    builder.Configuration.GetConnectionString("DefaultConnection"),
-    b => b.MigrationsAssembly("AuthService.Infrastructure"));
+// Bind DbContext
+startupLogger.LogInformation("Adding DbContext");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration["DbSettings:PostgresConnection"],
+        npgsql => npgsql.MigrationsAssembly("NotificationService.Infrastructure")
+    )
+);
+
+startupLogger.LogInformation("DbContext added");
 
 // Bind configuration
+startupLogger.LogInformation("Binding configuration");
 
 builder.Services
     .AddOptions<DbSettings>()
@@ -51,152 +70,204 @@ builder.Services
     .AddOptions<KafkaSettings>()
     .Bind(builder.Configuration.GetSection("Kafka"));
 
+builder.Services
+    .AddOptions<InternalAuthSettings>()
+    .Bind(builder.Configuration.GetSection("InternalAuthSettings"));
 
-// Get public key for auth
+startupLogger.LogInformation("Adding HTTP client");
 
-var isTestEnvironment = builder.Environment.IsEnvironment("Testing");
+var internalAuth = builder.Configuration
+                       .GetSection("InternalAuthSettings")
+                       .Get<InternalAuthSettings>() 
+                   ?? throw new InvalidOperationException("InternalAuthSettings aren't configured");
 
-if (isTestEnvironment)
-{
-    builder.Services.AddAuthentication("Test")
-        .AddScheme<TestAuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
-}
-else
-{
-    var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
-                  ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
+var endpointUri = new Uri(internalAuth.Endpoint!);
+var baseUri = endpointUri.GetLeftPart(UriPartial.Authority);
 
-    builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(10500); });
-
-    var handler = new HttpClientHandler
+builder.Services
+    .AddHttpClient(internalAuth.ServiceClientId!, client =>
     {
-        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
+        client.BaseAddress = new Uri(baseUri);
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Add("Accept", "application/json");
+    })
+    .AddHttpMessageHandler<InternalAuthHandler>();
 
-    var httpClient = new HttpClient(handler);
-    var rsa = RSA.Create();
-    var publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
-    rsa.ImportFromPem(publicKeyPem);
+startupLogger.LogInformation("HTTP client added");
 
-// Setup auth
-
-    builder.Services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new RsaSecurityKey(rsa),
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero,
-                ValidIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "test-issuer",
-                ValidAudience = builder.Configuration["JwtSettings:Audience"] ?? "test-audience",
-            };
-
-            options.Events = new JwtBearerEvents
-            {
-                OnMessageReceived = context =>
-                {
-                    if (string.IsNullOrEmpty(context.Token))
-                    {
-                        context.Token = context.Request.Cookies["accessToken"];
-                    }
-
-                    return Task.CompletedTask;
-                },
-                OnAuthenticationFailed = context =>
-                {
-                    Console.WriteLine($"Authentication failed: {context.Exception.Message}");
-                    return Task.CompletedTask;
-                },
-                OnTokenValidated = context =>
-                {
-                    Console.WriteLine("Token validated successfully");
-                    return Task.CompletedTask;
-                }
-            };
-        })
-        .AddJwtBearer("ServiceScheme", options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new RsaSecurityKey(rsa),
-                ValidateIssuer = true,
-                ValidIssuer = builder.Configuration["AuthSettings:Issuer"],
-                ValidateAudience = true,
-                ValidAudience = builder.Configuration["AuthSettings:Audience"],
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero
-            };
-            options.Events = new JwtBearerEvents
-            {
-                OnAuthenticationFailed = ctx =>
-                {
-                    var logger = ctx.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("ServiceSchemeAuth");
-
-                    var svcName = ctx.Principal?.FindFirst("service_name")?.Value ?? "unknown";
-
-                    logger.LogWarning(
-                        "ServiceScheme auth failed. Scheme={Scheme}, service_name={ServiceName}, Exception={Error}",
-                        ctx.Scheme,
-                        svcName,
-                        ctx.Exception.Message);
-
-                    return Task.CompletedTask;
-                },
-                OnTokenValidated = ctx =>
-                {
-                    var logger = ctx.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("ServiceSchemeAuthValidated");
-
-                    var svcName = ctx.Principal!.FindFirst("service_name")!.Value;
-
-                    logger.LogInformation("ServiceScheme token validated for {ServiceName}", svcName);
-
-                    return Task.CompletedTask;
-                }
-            };
-        });
-}
-
-// Setup authorization
-
-builder.Services.AddAuthorization(options =>
+// Configure Kestrel to start immediately
+builder.WebHost.ConfigureKestrel(options =>
 {
-    if (isTestEnvironment)
+    if (!builder.Environment.IsDevelopment())
     {
-        options.DefaultPolicy = new AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes("Test")
-            .RequireAuthenticatedUser()
-            .Build();
+        options.ListenAnyIP(10500);
     }
-    
-    options.AddPolicy("OnlyServices", policy =>
+    else
     {
-        if (isTestEnvironment)
-        {
-            policy.AddAuthenticationSchemes("Test");
-        }
-        else
-        {
-            policy.AddAuthenticationSchemes("ServiceScheme");
-            policy.RequireClaim("scope", "internal_api");
-        }
-    });
+        options.ListenAnyIP(10503);
+    }
 });
 
 
+// Get public key for auth
+startupLogger.LogInformation("Getting public key for auth");
+
+var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
+              ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
+
+startupLogger.LogInformation("Auth URL configured: {authUrl}", authUrl);
+
+var handler = new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+};
+
+var httpClient = new HttpClient(handler);
+httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+var rsa = RSA.Create();
+var publicKeyPem = string.Empty;
+
+try
+{
+    publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
+    rsa.ImportFromPem(publicKeyPem);
+    startupLogger.LogInformation("Public key for auth received successfully");
+}
+catch (Exception ex)
+{
+    startupLogger.LogWarning(ex, "Failed to retrieve public key from auth service. Using default key.");
+    rsa.ImportFromPem(builder.Configuration["JwtSettings:PublicKey"] ??
+                      throw new InvalidOperationException(
+                          "Cannot retrieve public key from auth service and no fallback key configured"));
+}
+
+// Setup auth
+startupLogger.LogInformation("Setting up authentication");
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new RsaSecurityKey(rsa),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "test-issuer",
+            ValidAudience = builder.Configuration["JwtSettings:Audience"] ?? "test-audience",
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token))
+                {
+                    context.Token = context.Request.Cookies["accessToken"];
+                }
+
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("AuthenticationFailed");
+                logger.LogWarning("Authentication failed: {Message}", context.Exception.Message);
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("TokenValidated");
+                logger.LogDebug("Token validated successfully");
+                return Task.CompletedTask;
+            }
+        };
+    })
+    .AddJwtBearer("ServiceScheme", options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new RsaSecurityKey(rsa),
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["AuthSettings:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["AuthSettings:Audience"],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("ServiceSchemeAuth");
+
+                var svcName = ctx.Principal?.FindFirst("service_name")?.Value ?? "unknown";
+
+                logger.LogWarning(
+                    "ServiceScheme auth failed. Scheme={Scheme}, service_name={ServiceName}, Exception={Error}",
+                    ctx.Scheme,
+                    svcName,
+                    ctx.Exception.Message);
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("ServiceSchemeAuthValidated");
+
+                var svcName = ctx.Principal!.FindFirst("service_name")!.Value;
+
+                logger.LogInformation("ServiceScheme token validated for {ServiceName}", svcName);
+
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+startupLogger.LogInformation("Authentication setup");
+
+// Setup authorization
+startupLogger.LogInformation("Setting up authorization");
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("OnlyServices", policy =>
+    {
+        policy.AddAuthenticationSchemes("ServiceScheme");
+        policy.RequireClaim("scope", "internal_api");
+    });
+    
+    options.AddPolicy("RequireUser", policy =>
+    {
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+        policy.RequireAuthenticatedUser();
+    });
+    
+    options.AddPolicy("UserOrService", policy =>
+    {
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, "ServiceScheme");
+        policy.RequireAuthenticatedUser();
+    });
+});
+
+startupLogger.LogInformation("Authorization setup");
+
 // Setup cors
+startupLogger.LogInformation("Setting up cors");
 
 builder.Services.AddCors(options =>
 {
@@ -210,9 +281,8 @@ builder.Services.AddCors(options =>
         });
 });
 
-builder.Services.AddHttpClient();
-
 // Bind rate limiter
+startupLogger.LogInformation("Adding rate limiter");
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -228,49 +298,74 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+startupLogger.LogInformation("Rate limiter added");
+
+// Add services
+startupLogger.LogInformation("Adding services");
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
+builder.Services.AddInternalAuthHandler();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers();
 
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.ShutdownTimeout = TimeSpan.FromSeconds(30);
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore; // Важно!
+});
+
+startupLogger.LogInformation("Services added");
+
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        startupLogger.LogInformation("Ensuring database is created...");
+        
+        var created = context.Database.EnsureCreated();
+        
+        if (created)
+        {
+            startupLogger.LogInformation("Database created successfully");
+        }
+        else
+        {
+            startupLogger.LogInformation("Database already exists");
+        }
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogError(ex, "Error occurred while ensuring database creation");
+        throw;
+    }
+}
+
+app.Lifetime.ApplicationStarted.Register(() => { startupLogger.LogInformation("Application started successfully"); });
+
+app.Lifetime.ApplicationStopping.Register(() => { startupLogger.LogInformation("Application is stopping..."); });
+
+app.Lifetime.ApplicationStopped.Register(() => { startupLogger.LogInformation("Application stopped"); });
+
+// Configure the HTTP request pipeline
+startupLogger.LogInformation("Configuring the HTTP request pipeline");
 
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
-app.UseHttpsRedirection();
+startupLogger.LogInformation("HTTP request pipeline configured");
+
 app.MapControllers();
+
+app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));
+
+startupLogger.LogInformation("Starting the application");
+
 app.Run();
-
-public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticationSchemeOptions>
-{
-    public TestAuthenticationHandler(IOptionsMonitor<TestAuthenticationSchemeOptions> options,
-        ILoggerFactory logger, UrlEncoder encoder) : base(options, logger, encoder)
-    {
-    }
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
-            new Claim("sub", "test-user-id"),
-            new Claim("userId", "test-user-id"),
-            new Claim(ClaimTypes.Name, "Test User"),
-            new Claim("scope", "internal_api")
-        };
-
-        var identity = new ClaimsIdentity(claims, "Test");
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, "Test");
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
-    }
-}
-
-public class TestAuthenticationSchemeOptions : AuthenticationSchemeOptions
-{
-}
 
 public partial class Program;

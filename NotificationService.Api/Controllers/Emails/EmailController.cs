@@ -11,8 +11,7 @@ using TaskHandler.Shared.Notifications.DTOs;
 namespace NotificationService.Api.Controllers.Emails;
 
 [ApiController]
-[Authorize(Policy = "OnlyServices", 
-    AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme + ",ServiceScheme")]
+[Authorize(Policy = "OnlyServices")]
 [Route("api/[controller]")]
 public class EmailController : ControllerBase
 {
