@@ -1,7 +1,11 @@
+using System.Net.Mime;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using NotificationService.Api.Middleware.Exceptions;
 using NotificationService.Api.Middleware.Tokens;
@@ -9,6 +13,7 @@ using NotificationService.Application;
 using NotificationService.Application.Configurations;
 using NotificationService.Infrastructure;
 using NotificationService.Infrastructure.Persistence;
+using Microsoft.OpenApi.Models;
 
 using var loggerFactory = LoggerFactory.Create(logging =>
 {
@@ -300,6 +305,10 @@ builder.Services.AddRateLimiter(options =>
 
 startupLogger.LogInformation("Rate limiter added");
 
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy("Service is running"));
+
+
 // Add services
 startupLogger.LogInformation("Adding services");
 
@@ -316,6 +325,43 @@ builder.Services.Configure<HostOptions>(options =>
 });
 
 startupLogger.LogInformation("Services added");
+
+builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "Notification Service API", 
+        Version = "v1",
+        Description = "API for managing notifications"
+    });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
@@ -359,6 +405,43 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 startupLogger.LogInformation("HTTP request pipeline configured");
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Notification Service API V1");
+    });
+}
+
+// Health Check endpoints
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        var result = JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(entry => new
+            {
+                name = entry.Key,
+                status = entry.Value.Status.ToString(),
+                exception = entry.Value.Exception?.Message,
+                duration = entry.Value.Duration.ToString()
+            })
+        });
+        
+        context.Response.ContentType = MediaTypeNames.Application.Json;
+        await context.Response.WriteAsync(result);
+    }
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+
 
 app.MapControllers();
 
