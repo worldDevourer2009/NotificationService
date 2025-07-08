@@ -1,16 +1,24 @@
 using Confluent.Kafka;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NotificationService.Application.Configurations;
 using NotificationService.Application.Interfaces;
+using NotificationService.Application.Services.Repos;
 using NotificationService.Domain.Services;
+using NotificationService.Infrastructure.Interfaces;
+using NotificationService.Infrastructure.Kafka.Consumers.AuthService;
 using NotificationService.Infrastructure.Kafka.Producers;
+using NotificationService.Infrastructure.Persistence;
 using NotificationService.Infrastructure.Services;
+using NotificationService.Infrastructure.Services.Repos;
 using NotificationService.Infrastructure.SignalR;
 using StackExchange.Redis;
-using TaskHandler.Domain.Services;
+using TaskHandler.Shared.InternalAuth.Interfaces;
+using TaskHandler.Shared.InternalAuth.Services;
+using TaskHandler.Shared.Kafka.Topics.AuthServiceTopics;
 
 namespace NotificationService.Infrastructure;
 
@@ -23,8 +31,42 @@ public static class DependencyInjection
         BindTelegram(services);
         BindKafkaProducer(services);
         BindSignalR(services);
-        
+        BindNotificationService(services);
+        BindKafkaConsumers(services);
+        BindInternalAuth(services);
+        BindDB(services);
         return services;
+    }
+
+    private static void BindInternalAuth(IServiceCollection services)
+    {
+        services.AddSingleton<IInternalTokenProvider, InternalTokenProvider>();
+    }
+
+    private static void BindDB(IServiceCollection services)
+    {
+        services.AddScoped<IApplicationDbContext, AppDbContext>();
+        services.AddScoped<IInternalNotificationRepository, InternalNotificationRepository>();
+        services.AddScoped<INotificationGroupRepository, NotificationGroupRepository>();
+    }
+
+    private static void BindKafkaConsumers(IServiceCollection services)
+    {
+        var authTopics = new string[]
+        {
+            AuthServiceTopics.AuthServiceUserLoggedIn,
+            AuthServiceTopics.AuthServiceUserLoggedOut,
+            AuthServiceTopics.AuthServiceUserSignedUp
+        };
+
+        services.AddSingleton<IEnumerable<string>>(provider => authTopics);
+        services.AddHostedService<AuthServiceEventConsumer>();
+    }
+    
+    private static void BindNotificationService(IServiceCollection services)
+    {
+        services.AddScoped<INotificationService, Services.NotificationService>();
+        services.AddScoped<INotificationGroupService, NotificationGroupService>();
     }
 
     private static void BindSignalR(IServiceCollection services)
@@ -60,6 +102,9 @@ public static class DependencyInjection
                 BootstrapServers = options.BootstrapServers,
                 ClientId = options.ClientId,
                 MessageTimeoutMs = options.MessageTimeoutMs,
+                LingerMs = 10,
+                RequestTimeoutMs = 30000,
+                DeliveryReportFields = "all"
             };
 
             var producerBuilder = new ProducerBuilder<string, string>(kafkaConfig);
@@ -80,7 +125,8 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<EmailSettings>>();
-            return new SmtpEmailSender(options);
+            var logger = sp.GetRequiredService<ILogger<MailKitEmailSender>>();
+            return new MailKitEmailSender(options, logger);
         });
     }
 
@@ -89,13 +135,13 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<DbSettings>>();
-            var config = ConfigurationOptions.Parse(settings.Value.DefaultConnection!);
+            var config = ConfigurationOptions.Parse(settings.Value.RedisConnection!);
             config.AbortOnConnectFail = false;
             config.AllowAdmin = true;
             config.ConnectTimeout = 10000;
             config.ConnectRetry = 3;
             config.AsyncTimeout = 5000;
-            return ConnectionMultiplexer.Connect(settings.Value.DefaultConnection!);
+            return ConnectionMultiplexer.Connect(settings.Value.RedisConnection!);
         });
 
         services.AddSingleton(sp => 

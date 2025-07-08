@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationService.Application.Commands.TelegramCommandHandlers;
 using TaskHandler.Shared.Notifications.DTOs.TgDTOs;
 
-namespace NotificationService.Api.Controllers;
+namespace NotificationService.Api.Controllers.Tg;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "OnlyServices")]
 [Route("api/[controller]")]
 public class TgController : ControllerBase
 {
@@ -19,7 +19,7 @@ public class TgController : ControllerBase
     {
         _mediator = mediator;
         _httpClient = factory.CreateClient("AuthService");
-        _httpClient.BaseAddress = new Uri("https://localhost:9500/");
+        _httpClient.BaseAddress = new Uri("http://authservice-api/");
     }
 
     [HttpPost("send-notification")]

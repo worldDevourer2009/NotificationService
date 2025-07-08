@@ -1,15 +1,17 @@
 using System.Security.Claims;
 using System.Text.Json;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NotificationService.Api.Controllers.Tg;
 using NotificationService.Application.Commands.Emails;
 using TaskHandler.Shared.Notifications.DTOs;
 
 namespace NotificationService.Api.Controllers.Emails;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "OnlyServices")]
 [Route("api/[controller]")]
 public class EmailController : ControllerBase
 {
