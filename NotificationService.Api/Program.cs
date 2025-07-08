@@ -383,7 +383,6 @@ startupLogger.LogInformation("Configuring the HTTP request pipeline");
 
 app.UseCors("AllowAll");
 
-// Добавляем middleware для получения публичного ключа
 app.UseMiddleware<PublicKeyMiddleware>();
 
 app.UseAuthentication();
