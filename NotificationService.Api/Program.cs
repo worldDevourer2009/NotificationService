@@ -1,5 +1,4 @@
 using System.Net.Mime;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using NotificationService.Api.Middleware.Exceptions;
 using NotificationService.Api.Middleware.Tokens;
+using NotificationService.Api.Services;
 using NotificationService.Application;
 using NotificationService.Application.Configurations;
 using NotificationService.Infrastructure;
@@ -98,6 +98,8 @@ builder.Services
     })
     .AddHttpMessageHandler<InternalAuthHandler>();
 
+builder.Services.AddHttpClient();
+
 startupLogger.LogInformation("HTTP client added");
 
 // Configure Kestrel to start immediately
@@ -113,42 +115,12 @@ builder.WebHost.ConfigureKestrel(options =>
     }
 });
 
-
-// Get public key for auth
-startupLogger.LogInformation("Getting public key for auth");
-
-var authUrl = builder.Configuration["AuthSettings:BaseUrl"]
-              ?? throw new InvalidOperationException("AuthSettings:BaseUrl is not set");
-
-startupLogger.LogInformation("Auth URL configured: {authUrl}", authUrl);
-
-var handler = new HttpClientHandler
-{
-    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-};
-
-var httpClient = new HttpClient(handler);
-httpClient.Timeout = TimeSpan.FromSeconds(30);
-
-var rsa = RSA.Create();
-var publicKeyPem = string.Empty;
-
-try
-{
-    publicKeyPem = await httpClient.GetStringAsync($"{authUrl}/.well-known/public-key.pem");
-    rsa.ImportFromPem(publicKeyPem);
-    startupLogger.LogInformation("Public key for auth received successfully");
-}
-catch (Exception ex)
-{
-    startupLogger.LogWarning(ex, "Failed to retrieve public key from auth service. Using default key.");
-    rsa.ImportFromPem(builder.Configuration["JwtSettings:PublicKey"] ??
-                      throw new InvalidOperationException(
-                          "Cannot retrieve public key from auth service and no fallback key configured"));
-}
+// Добавляем сервис для работы с публичным ключом
+builder.Services.AddSingleton<IPublicKeyService, PublicKeyService>();
 
 // Setup auth
 startupLogger.LogInformation("Setting up authentication");
+
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -159,7 +131,14 @@ builder.Services.AddAuthentication(options =>
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new RsaSecurityKey(rsa),
+            IssuerSigningKeyResolver = (token, securityToken, kid, parameters) =>
+            {
+                var publicKeyService = builder.Services.BuildServiceProvider().GetRequiredService<IPublicKeyService>();
+                return new[]
+                {
+                    publicKeyService.GetPublicKey()
+                };
+            },
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateLifetime = true,
@@ -202,7 +181,11 @@ builder.Services.AddAuthentication(options =>
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new RsaSecurityKey(rsa),
+            IssuerSigningKeyResolver = (token, securityToken, kid, parameters) =>
+            {
+                var publicKeyService = builder.Services.BuildServiceProvider().GetRequiredService<IPublicKeyService>();
+                return new[] { publicKeyService.GetPublicKey() };
+            },
             ValidateIssuer = true,
             ValidIssuer = builder.Configuration["AuthSettings:Issuer"],
             ValidateAudience = true,
@@ -308,7 +291,6 @@ startupLogger.LogInformation("Rate limiter added");
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Service is running"));
 
-
 // Add services
 startupLogger.LogInformation("Adding services");
 
@@ -321,7 +303,7 @@ builder.Services.AddControllers();
 builder.Services.Configure<HostOptions>(options =>
 {
     options.ShutdownTimeout = TimeSpan.FromSeconds(30);
-    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore; // Важно!
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
 });
 
 startupLogger.LogInformation("Services added");
@@ -400,6 +382,10 @@ app.Lifetime.ApplicationStopped.Register(() => { startupLogger.LogInformation("A
 startupLogger.LogInformation("Configuring the HTTP request pipeline");
 
 app.UseCors("AllowAll");
+
+// Добавляем middleware для получения публичного ключа
+app.UseMiddleware<PublicKeyMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -441,7 +427,6 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
-
 
 app.MapControllers();
 
